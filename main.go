@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/tls"
+	"flag"
 	"io"
 	"log"
 	"net/http"
@@ -10,19 +11,6 @@ import (
 	"strconv"
 	"strings"
 )
-
-// hop-by-hop headers
-// http://www.w3.org/Protocols/rfc2616/rfc2616-sec13.html
-var hopHeaders = []string{
-	"Connection",
-	"Keep-Alive",
-	"Proxy-Authenticate",
-	"Proxy-Authorization",
-	"Te",
-	"Trailers",
-	"Transfer-Encoding",
-	"Upgrade",
-}
 
 type RewriteTransport struct {
 	Transport http.RoundTripper
@@ -48,15 +36,6 @@ func getProxyClient(proxy string, ignoreSsl bool) *http.Client {
 	return myClient
 }
 
-func containsHeader(s string, list []string) bool {
-	for _, v := range list {
-		if v == s {
-			return true
-		}
-	}
-	return false
-}
-
 func newProxyHandler(httpClient *http.Client, targetHost string, headersMap map[string]string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// get path from request and append to target url
@@ -78,11 +57,6 @@ func newProxyHandler(httpClient *http.Client, targetHost string, headersMap map[
 		}
 
 		// copy headers from original request to new request
-		for k, v := range r.Header {
-			if !containsHeader(k, hopHeaders) {
-				req.Header[k] = v
-			}
-		}
 
 		// send request to target url
 		resp, err := httpClient.Do(req)
@@ -115,23 +89,19 @@ func newProxyHandler(httpClient *http.Client, targetHost string, headersMap map[
 	})
 }
 
+var listen = flag.String("l", "0.0.0.0:5100", "listen on this address defautl 0.0.0.0:5100")
+var proxy = flag.String("p", "socks5://127.0.0.1:1080", "proxy server")
+var target = flag.String("t", "127.0.0.1:80", "target server")
+
 func main() {
+	flag.Parse()
 	// get server url from env
-	serverUrl := os.Getenv("SERVER_URL")
-	if serverUrl == "" {
-		serverUrl = "0.0.0.0:8080"
-	}
+	serverUrl := *listen
 
 	// get socks5 proxy from env
-	proxyUrl := os.Getenv("PROXY_DSN")
-	if proxyUrl == "" {
-		log.Fatal("PROXY_DSN is not set")
-	}
+	proxyUrl := *proxy
 
-	targetHost := os.Getenv("TARGET_HOST")
-	if targetHost == "" {
-		log.Fatal("TARGET_HOST is not set")
-	}
+	targetHost := *target
 
 	ignoreSsl := os.Getenv("IGNORE_SSL")
 	if ignoreSsl == "" {
